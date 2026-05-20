@@ -96,6 +96,10 @@ export class PagingSimulator {
     current.advanceRef();
     this.clockTick++;
 
+    if (this.clockTick % this.clockCycle === 0) {
+      this.clearAllReferencedBits();
+    }
+
     // Check quantum expiry
     const quantumExpired = this.dispatcher.onRefExecuted();
     result.quantumExpired = quantumExpired;
