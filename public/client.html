@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MemSim — Nodo Origen</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@300;400;600;700&display=swap');
+
+:root {
+  --bg: #0a0e17;
+  --surface: #111827;
+  --surface2: #1a2235;
+  --border: #1e2d45;
+  --accent: #7c3aed;
+  --green: #10b981;
+  --red: #ef4444;
+  --yellow: #f59e0b;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Space Grotesk', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.logo { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--accent); letter-spacing: 2px; }
+.logo span { color: var(--muted); font-weight: 300; }
+
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--red);
+  display: inline-block; margin-right: 8px;
+  transition: background 0.3s;
+}
+.status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+.container { max-width: 720px; margin: 40px auto; padding: 0 24px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.card-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.form-row label { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.form-row input, .form-row textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  border-radius: 5px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-row input:focus, .form-row textarea:focus { border-color: var(--accent); }
+.form-row textarea { resize: vertical; min-height: 60px; }
+
+.btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 5px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: opacity 0.2s;
+}
+.btn:hover { opacity: 0.85; }
+
+.connect-section {
+  display: flex; gap: 12px; align-items: flex-end; margin-bottom: 20px;
+}
+.connect-section .form-row { flex: 1; margin-bottom: 0; }
+
+.log {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.log-entry { display: flex; gap: 10px; }
+.log-time { color: var(--muted); flex-shrink: 0; }
+.log-msg.ok { color: var(--green); }
+.log-msg.err { color: var(--red); }
+.log-msg.info { color: var(--text); }
+.log-msg.finish { color: var(--yellow); }
+
+.result-card {
+  background: rgba(16,185,129,0.05);
+  border: 1px solid rgba(16,185,129,0.3);
+  border-radius: 6px;
+  padding: 14px;
+  margin-top: 8px;
+}
+.result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.result-item .rk { color: var(--muted); font-size: 11px; }
+.result-item .rv { font-weight: 700; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">MEM<span>SIM</span> — Nodo Origen</div>
+  <div style="display:flex;align-items:center;font-family:var(--mono);font-size:12px;color:var(--muted);">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">Desconectado</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Connection -->
+  <div class="card">
+    <div class="card-title">Conexión al Servidor</div>
+    <div class="connect-section">
+      <div class="form-row">
+        <label>Dirección del servidor (ws://host:puerto)</label>
+        <input id="inp-server" type="text" value="" placeholder="ws://192.168.1.10:3000"/>
+      </div>
+      <div class="form-row">
+        <label>ID de este nodo</label>
+        <input id="inp-nodeid" type="text" value="" placeholder="nodo-sala3"/>
+      </div>
+      <button class="btn" onclick="connectToServer()" id="btn-connect">Conectar</button>
+    </div>
+  </div>
+
+  <!-- Add Process -->
+  <div class="card">
+    <div class="card-title">Enviar Proceso al Servidor</div>
+    <div class="form-row">
+      <label>Nombre del proceso</label>
+      <input id="inp-name" type="text" value="RemoteP1" placeholder="RemoteP1"/>
+    </div>
+    <div class="form-row">
+      <label>Número de páginas</label>
+      <input id="inp-pages" type="number" min="1" max="16" value="4"/>
+    </div>
+    <div class="form-row">
+      <label>Referencias de páginas (separadas por coma)</label>
+      <textarea id="inp-refs" placeholder="0,1,2,0,3,1,2">0,1,2,0,3,1,2,0</textarea>
+    </div>
+    <button class="btn" onclick="sendProcess()" id="btn-send" disabled>▶ Enviar proceso</button>
+    <div id="send-error" style="color:var(--red);font-family:var(--mono);font-size:11px;margin-top:6px;display:none;"></div>
+  </div>
+
+  <!-- Results -->
+  <div class="card" id="results-card" style="display:none;">
+    <div class="card-title">Resultados Recibidos</div>
+    <div id="results-container"></div>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <div class="card-title" style="display:flex;justify-content:space-between;">
+      <span>Registro de eventos</span>
+      <span onclick="clearLog()" style="cursor:pointer;color:var(--muted);font-size:10px;">Limpiar</span>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+</div>
+
+<script>
+let ws = null;
+let nodeId = null;
+let connected = false;
+
+// Pre-fill server URL with current host
+document.getElementById('inp-server').value = `ws://${location.host}`;
+document.getElementById('inp-nodeid').value = `nodo-${Math.floor(Math.random()*900+100)}`;
+
+function connectToServer() {
+  const serverUrl = document.getElementById('inp-server').value.trim();
+  const nid = document.getElementById('inp-nodeid').value.trim() || `nodo-${Date.now()}`;
+
+  if (ws) { ws.close(); }
+
+  ws = new WebSocket(serverUrl);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'register_origin', nodeId: nid }));
+    log('Conexión establecida con ' + serverUrl, 'ok');
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    switch (msg.type) {
+      case 'registered':
+        nodeId = msg.nodeId;
+        connected = true;
+        setStatus(true);
+        document.getElementById('btn-send').disabled = false;
+        log(`Registrado como "${nodeId}"`, 'ok');
+        break;
+      case 'process_added':
+        log(`Proceso "${msg.name}" (PID ${msg.pid}) aceptado por el servidor`, 'ok');
+        break;
+      case 'process_finished':
+        log(`✓ PROCESO TERMINADO: ${msg.name} (PID ${msg.pid})`, 'finish');
+        showResult(msg);
+        break;
+      case 'error':
+        log('Error: ' + msg.message, 'err');
+        break;
+    }
+  };
+
+  ws.onclose = () => {
+    connected = false;
+    setStatus(false);
+    document.getElementById('btn-send').disabled = true;
+    log('Conexión cerrada. Reconectando en 3s…', 'err');
+    setTimeout(() => {
+      if (!connected) connectToServer();
+    }, 3000);
+  };
+
+  ws.onerror = () => log('Error de conexión', 'err');
+}
+
+function sendProcess() {
+  if (!connected) { log('No conectado', 'err'); return; }
+
+  const name = document.getElementById('inp-name').value.trim();
+  const numPages = parseInt(document.getElementById('inp-pages').value);
+  const refsRaw = document.getElementById('inp-refs').value.trim();
+  const errEl = document.getElementById('send-error');
+
+  if (!name) { errEl.textContent='Nombre requerido'; errEl.style.display='block'; return; }
+  if (isNaN(numPages)||numPages<1) { errEl.textContent='Páginas inválidas'; errEl.style.display='block'; return; }
+
+  let refs;
+  try {
+    refs = refsRaw.split(/[\s,]+/).filter(Boolean).map(x => {
+      const n = parseInt(x);
+      if (isNaN(n)) throw new Error();
+      return n;
+    });
+  } catch {
+    errEl.textContent = 'Referencias inválidas'; errEl.style.display = 'block'; return;
+  }
+
+  errEl.style.display = 'none';
+  ws.send(JSON.stringify({ type: 'add_process', name, numPages, refs, originNodeId: nodeId }));
+  log(`Enviando proceso "${name}" con ${refs.length} referencias…`, 'info');
+
+  // Auto-increment name
+  const m = name.match(/^(\D*)(\d+)$/);
+  if (m) document.getElementById('inp-name').value = m[1] + (parseInt(m[2]) + 1);
+}
+
+function showResult(msg) {
+  const card = document.getElementById('results-card');
+  card.style.display = 'block';
+  const container = document.getElementById('results-container');
+  const div = document.createElement('div');
+  div.className = 'result-card';
+  div.innerHTML = `
+    <div style="font-family:var(--mono);font-weight:700;color:var(--green);margin-bottom:10px;">
+      ${msg.name} (PID ${msg.pid})
+    </div>
+    <div class="result-grid">
+      <div class="result-item"><div class="rk">Tiempo de llegada</div><div class="rv">${msg.arrivalTime}</div></div>
+      <div class="result-item"><div class="rk">Tiempo de terminación</div><div class="rv">${msg.finishTime}</div></div>
+      <div class="result-item"><div class="rk">Tiempo de espera</div><div class="rv" style="color:var(--yellow)">${msg.waitTime}</div></div>
+      <div class="result-item"><div class="rk">Tiempo de retorno</div><div class="rv" style="color:var(--accent)">${msg.finishTime - msg.arrivalTime}</div></div>
+      <div class="result-item"><div class="rk">Referencias ejecutadas</div><div class="rv">${msg.refsExecuted}</div></div>
+      <div class="result-item"><div class="rk">Fallos de página</div><div class="rv" style="color:var(--red)">${msg.pageFaults}</div></div>
+    </div>
+  `;
+  container.prepend(div);
+}
+
+function log(msg, type = 'info') {
+  const logEl = document.getElementById('log');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  const now = new Date();
+  const t = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+  entry.innerHTML = `<span class="log-time">${t}</span><span class="log-msg ${type}">${msg}</span>`;
+  logEl.appendChild(entry);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('log').innerHTML = '';
+}
+
+function setStatus(isConnected) {
+  document.getElementById('status-dot').className = `status-dot${isConnected ? ' connected' : ''}`;
+  document.getElementById('status-text').textContent = isConnected ? `Conectado como ${nodeId}` : 'Desconectado';
+}
+</script>
+</body>
+</html>

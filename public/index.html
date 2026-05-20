@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MemSim — Simulador de Memoria Virtual</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@300;400;600;700&display=swap');
+
+:root {
+  --bg: #0a0e17;
+  --surface: #111827;
+  --surface2: #1a2235;
+  --border: #1e2d45;
+  --accent: #00d4ff;
+  --accent2: #7c3aed;
+  --green: #10b981;
+  --red: #ef4444;
+  --yellow: #f59e0b;
+  --orange: #f97316;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Space Grotesk', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Header ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+
+.logo {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 2px;
+}
+
+.logo span { color: var(--muted); font-weight: 300; }
+
+.header-stats {
+  display: flex; gap: 24px; align-items: center;
+}
+
+.stat-badge {
+  display: flex; flex-direction: column; align-items: center;
+  font-family: var(--mono);
+}
+
+.stat-badge .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+.stat-badge .value { font-size: 18px; font-weight: 700; color: var(--accent); }
+.stat-badge .value.fault { color: var(--red); }
+.stat-badge .value.tick { color: var(--yellow); }
+
+/* ── Layout ── */
+.layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 0;
+  height: calc(100vh - 57px);
+}
+
+/* ── Left panel ── */
+.left-panel {
+  grid-row: 1 / 3;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--muted);
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dot { width: 6px; height: 6px; border-radius: 50%; }
+.dot-cyan { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.dot-purple { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+.dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.dot-red { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+/* ── Add Process Form ── */
+.add-form {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.add-form h3 {
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--accent);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.form-row { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+.form-row label { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.form-row input, .form-row textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-row input:focus, .form-row textarea:focus { border-color: var(--accent); }
+.form-row textarea { resize: vertical; min-height: 52px; }
+
+.btn-add {
+  width: 100%;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  padding: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.btn-add:hover { opacity: 0.85; }
+.btn-add:active { transform: scale(0.98); }
+
+/* ── Process list ── */
+.process-list { overflow-y: auto; flex: 1; padding: 8px; }
+
+.proc-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  transition: border-color 0.2s;
+}
+
+.proc-card.running { border-color: var(--accent); box-shadow: 0 0 12px rgba(0,212,255,0.1); }
+.proc-card.finished { opacity: 0.5; }
+
+.proc-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 6px;
+}
+
+.proc-name {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.proc-pid {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.proc-state {
+  font-size: 10px;
+  font-family: var(--mono);
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.state-ready { background: rgba(245,158,11,0.2); color: var(--yellow); }
+.state-running { background: rgba(0,212,255,0.2); color: var(--accent); }
+.state-finished { background: rgba(16,185,129,0.2); color: var(--green); }
+
+.proc-stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  margin-top: 6px;
+}
+
+.proc-stat { display: flex; flex-direction: column; }
+.proc-stat .k { color: var(--muted); }
+.proc-stat .v { color: var(--text); font-weight: 600; }
+
+.proc-refs-bar {
+  margin-top: 6px;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.proc-refs-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s;
+  border-radius: 2px;
+}
+
+/* ── Right panel top (Frame Map) ── */
+.right-top {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 0;
+  overflow: auto;
+}
+
+/* ── Right panel bottom (Page Tables) ── */
+.right-bottom {
+  background: var(--bg);
+  overflow: auto;
+}
+
+/* ── Controls bar ── */
+.controls {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  grid-column: 2;
+}
+
+.btn-step {
+  background: var(--green);
+  color: #000;
+  border: none;
+  padding: 8px 20px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  display: flex; align-items: center; gap: 6px;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.btn-step:hover { opacity: 0.85; }
+.btn-step:active { transform: scale(0.98); }
+
+.btn-back {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.btn-back:hover { border-color: var(--accent); }
+.btn-back:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.current-proc-badge {
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.3);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.quantum-bar-wrap {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+}
+
+.quantum-slots { display: flex; gap: 3px; }
+.quantum-slot {
+  width: 12px; height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+}
+.quantum-slot.filled { background: var(--accent); border-color: var(--accent); }
+
+/* ── Alert toast ── */
+#alert-toast {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--surface);
+  border-left: 3px solid var(--red);
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  max-width: 320px;
+  animation: slideIn 0.3s ease, fadeOut 0.3s ease 3.7s forwards;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+.toast.fault { border-color: var(--red); color: var(--red); }
+.toast.info { border-color: var(--accent); color: var(--accent); }
+.toast.success { border-color: var(--green); color: var(--green); }
+.toast.quantum { border-color: var(--yellow); color: var(--yellow); }
+
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeOut { to { opacity: 0; transform: translateX(40px); } }
+
+/* ── Frame Map ── */
+.frame-map-container {
+  padding: 12px 16px;
+}
+
+.frame-map-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.frame-cell {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 4px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  transition: all 0.2s;
+}
+.frame-cell.occupied {
+  border-color: var(--accent);
+  background: rgba(0,212,255,0.05);
+}
+.frame-cell .f-num { color: var(--muted); font-size: 9px; }
+.frame-cell .f-pid { font-weight: 700; font-size: 11px; }
+.frame-cell .f-page { color: var(--muted); }
+
+/* ── Page Tables ── */
+.tables-container { padding: 12px 16px; }
+
+.pt-section { margin-bottom: 20px; }
+.pt-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+thead th {
+  background: var(--surface2);
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+tbody td {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(30,45,69,0.5);
+  vertical-align: middle;
+}
+
+tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+.bit {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border-radius: 3px;
+  text-align: center;
+  line-height: 16px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.bit-1 { background: rgba(0,212,255,0.2); color: var(--accent); }
+.bit-0 { background: var(--surface2); color: var(--muted); }
+
+/* ── Reports ── */
+.reports-section {
+  padding: 12px 16px;
+}
+
+.reports-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--green);
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.report-table th {
+  background: rgba(16,185,129,0.1);
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--green);
+  border-bottom: 1px solid rgba(16,185,129,0.2);
+}
+
+.report-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(30,45,69,0.5);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+.color-hint {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+
+/* pid colors */
+.pid-1 { background: #00d4ff; }
+.pid-2 { background: #7c3aed; }
+.pid-3 { background: #10b981; }
+.pid-4 { background: #f59e0b; }
+.pid-5 { background: #ef4444; }
+.pid-6 { background: #f97316; }
+.pid-7 { background: #ec4899; }
+.pid-8 { background: #06b6d4; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">MEM<span>SIM</span></div>
+  <div class="header-stats">
+    <div class="stat-badge">
+      <span class="label">Ciclo</span>
+      <span class="value tick" id="hdr-tick">0</span>
+    </div>
+    <div class="stat-badge">
+      <span class="label">Fallos</span>
+      <span class="value fault" id="hdr-faults">0</span>
+    </div>
+    <div class="stat-badge">
+      <span class="label">Marcos libres</span>
+      <span class="value" id="hdr-free">—</span>
+    </div>
+  </div>
+  <a href="/client" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-decoration:none;border:1px solid var(--border);padding:6px 12px;border-radius:4px;">
+    + Nodo Origen
+  </a>
+</header>
+
+<div class="layout">
+  <!-- ─── LEFT PANEL ─── -->
+  <div class="left-panel">
+    <div class="panel-title"><span class="dot dot-purple"></span>Procesos</div>
+
+    <!-- Add Process Form -->
+    <div class="add-form">
+      <h3>+ Agregar Proceso</h3>
+      <div class="form-row">
+        <label>Nombre</label>
+        <input id="inp-name" type="text" placeholder="P1" value="P1"/>
+      </div>
+      <div class="form-row">
+        <label>Número de páginas</label>
+        <input id="inp-pages" type="number" min="1" max="16" value="4"/>
+      </div>
+      <div class="form-row">
+        <label>Referencias (ej: 0,1,2,0,3,1)</label>
+        <textarea id="inp-refs" placeholder="0,1,2,0,3,1,2">0,1,2,0,3,1,2,0,1,3</textarea>
+      </div>
+      <button class="btn-add" onclick="addProcess()">▶ Agregar al simulador</button>
+      <div id="form-error" style="color:var(--red);font-size:11px;font-family:var(--mono);margin-top:4px;display:none;"></div>
+    </div>
+
+    <!-- Process list -->
+    <div class="process-list" id="proc-list">
+      <div style="color:var(--muted);font-family:var(--mono);font-size:11px;text-align:center;padding:24px;">
+        Sin procesos. Agrega uno.
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── CONTROLS BAR ─── -->
+  <div class="controls" style="grid-column:2;grid-row:1;">
+    <button class="btn-step" onclick="step()">
+      ▶ STEP
+    </button>
+    <button class="btn-back" id="btn-back" onclick="stepBack()" disabled>
+      ◀ ATRÁS
+    </button>
+    <div class="current-proc-badge" id="current-badge">Sin proceso activo</div>
+    <div class="quantum-bar-wrap">
+      <span>Quantum:</span>
+      <div class="quantum-slots" id="quantum-slots"></div>
+      <span id="quantum-label" style="color:var(--text)"></span>
+    </div>
+  </div>
+
+  <!-- ─── RIGHT CONTENT ─── -->
+  <div style="grid-column:2;grid-row:2;overflow:auto;display:flex;flex-direction:column;">
+    <!-- Frame Map -->
+    <div class="frame-map-container">
+      <div class="panel-title" style="padding:0 0 8px 0;">
+        <span class="dot dot-cyan"></span>Mapa de Marcos de Memoria
+      </div>
+      <div class="frame-map-grid" id="frame-map"></div>
+    </div>
+
+    <hr style="border-color:var(--border);">
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);">
+      <button class="tab-btn active" onclick="showTab('pages')" id="tab-pages"
+        style="background:none;border:none;border-bottom:2px solid var(--accent);color:var(--accent);
+        font-family:var(--mono);font-size:11px;padding:8px 16px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;">
+        Tablas de Páginas
+      </button>
+      <button class="tab-btn" onclick="showTab('reports')" id="tab-reports"
+        style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);
+        font-family:var(--mono);font-size:11px;padding:8px 16px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;">
+        Reportes
+      </button>
+    </div>
+
+    <!-- Page tables tab -->
+    <div id="pane-pages" class="tables-container" style="flex:1;overflow:auto;"></div>
+
+    <!-- Reports tab -->
+    <div id="pane-reports" class="reports-section" style="display:none;flex:1;overflow:auto;"></div>
+  </div>
+</div>
+
+<div id="alert-toast"></div>
+
+<script>
+// ──────────────────────────────────────────────────────
+// WebSocket connection
+// ──────────────────────────────────────────────────────
+let ws;
+let state = null;
+
+const PID_COLORS = ['#00d4ff','#7c3aed','#10b981','#f59e0b','#ef4444','#f97316','#ec4899','#06b6d4'];
+const pidColorMap = {};
+let colorIdx = 0;
+
+function pidColor(pid) {
+  if (!pidColorMap[pid]) {
+    pidColorMap[pid] = PID_COLORS[colorIdx % PID_COLORS.length];
+    colorIdx++;
+  }
+  return pidColorMap[pid];
+}
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}`);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'register_gui' }));
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'state') {
+      state = msg.data;
+      render();
+    } else if (msg.type === 'step_result') {
+      state = msg.state;
+      handleStepResult(msg.result);
+      render();
+    } else if (msg.type === 'error') {
+      showError(msg.message);
+    }
+  };
+
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+
+connect();
+
+// ──────────────────────────────────────────────────────
+// Actions
+// ──────────────────────────────────────────────────────
+
+function addProcess() {
+  const name = document.getElementById('inp-name').value.trim();
+  const numPages = parseInt(document.getElementById('inp-pages').value);
+  const refsRaw = document.getElementById('inp-refs').value.trim();
+  const errEl = document.getElementById('form-error');
+
+  if (!name) { showFormError('Nombre requerido'); return; }
+  if (isNaN(numPages) || numPages < 1) { showFormError('Páginas inválidas'); return; }
+
+  let refs;
+  try {
+    refs = refsRaw.split(/[\s,]+/).filter(Boolean).map(x => {
+      const n = parseInt(x);
+      if (isNaN(n)) throw new Error('bad ref');
+      return n;
+    });
+  } catch {
+    showFormError('Referencias inválidas');
+    return;
+  }
+
+  errEl.style.display = 'none';
+  ws.send(JSON.stringify({ type: 'add_process', name, numPages, refs }));
+
+  // Auto increment name
+  const m = name.match(/^(\D*)(\d+)$/);
+  if (m) document.getElementById('inp-name').value = m[1] + (parseInt(m[2]) + 1);
+}
+
+function step() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: 'step' }));
+}
+
+function stepBack() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: 'step_back' }));
+}
+
+function showFormError(msg) {
+  const el = document.getElementById('form-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
+}
+
+function showError(msg) {
+  toast(msg, 'fault');
+}
+
+// ──────────────────────────────────────────────────────
+// Toast notifications
+// ──────────────────────────────────────────────────────
+
+function toast(msg, type = 'info') {
+  const container = document.getElementById('alert-toast');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 4100);
+}
+
+function handleStepResult(r) {
+  if (r.noProcesses) {
+    toast('Sin procesos activos', 'info');
+    return;
+  }
+  if (r.pageFault) {
+    toast(`⚠ FALLO DE PÁGINA — PID ${r.currentPid}, pág. ${r.faultPage}${r.evictedFrame !== undefined ? ` → marco ${r.evictedFrame} liberado` : ''}`, 'fault');
+  }
+  if (r.processFinished) {
+    toast(`✓ Proceso "${r.finishedName}" (PID ${r.finishedPid}) terminado`, 'success');
+  }
+  if (r.quantumExpired && !r.processFinished) {
+    toast(`⟳ Quantum expirado — PID ${r.currentPid} → cola lista`, 'quantum');
+  }
+}
+
+// ──────────────────────────────────────────────────────
+// Render
+// ──────────────────────────────────────────────────────
+
+function render() {
+  if (!state) return;
+
+  // Header stats
+  document.getElementById('hdr-tick').textContent = state.clockTick;
+  document.getElementById('hdr-faults').textContent = state.totalPageFaults;
+  const freeFrames = state.frameMap.filter(f => f.pid === -1).length;
+  document.getElementById('hdr-free').textContent = freeFrames;
+
+  // Controls
+  const cur = state.currentPid;
+  const curProc = state.processes.find(p => p.pid === cur);
+  document.getElementById('current-badge').textContent =
+    curProc ? `▶ ${curProc.name} (PID ${curProc.pid})` : 'Sin proceso activo';
+
+  // Quantum slots
+  const qSlots = document.getElementById('quantum-slots');
+  qSlots.innerHTML = '';
+  for (let i = 0; i < state.quantum; i++) {
+    const s = document.createElement('div');
+    s.className = `quantum-slot${i < state.refsInQuantum ? ' filled' : ''}`;
+    qSlots.appendChild(s);
+  }
+  document.getElementById('quantum-label').textContent = `${state.refsInQuantum}/${state.quantum}`;
+
+  document.getElementById('btn-back').disabled = !state.canStepBack;
+
+  // Frame map
+  renderFrameMap();
+
+  // Process list
+  renderProcessList();
+
+  // Page tables
+  renderPageTables();
+
+  // Reports
+  renderReports();
+}
+
+function renderFrameMap() {
+  const grid = document.getElementById('frame-map');
+  grid.innerHTML = '';
+  for (const f of state.frameMap) {
+    const cell = document.createElement('div');
+    cell.className = `frame-cell${f.pid !== -1 ? ' occupied' : ''}`;
+    if (f.pid !== -1) {
+      cell.style.borderColor = pidColor(f.pid);
+      cell.style.background = pidColor(f.pid) + '18';
+    }
+    cell.innerHTML = `
+      <div class="f-num">F${f.frame}</div>
+      ${f.pid !== -1
+        ? `<div class="f-pid" style="color:${pidColor(f.pid)}">${getProcName(f.pid)}</div>
+           <div class="f-page">p${f.page}</div>`
+        : `<div class="f-pid" style="color:var(--muted)">FREE</div>`
+      }
+    `;
+    grid.appendChild(cell);
+  }
+}
+
+function getProcName(pid) {
+  const p = state.processes.find(x => x.pid === pid) || state.finishedProcesses.find(x => x.pid === pid);
+  return p ? p.name : `P${pid}`;
+}
+
+function renderProcessList() {
+  const list = document.getElementById('proc-list');
+  const allProcs = state.processes;
+
+  if (allProcs.length === 0 && state.finishedProcesses.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-family:var(--mono);font-size:11px;text-align:center;padding:24px;">Sin procesos. Agrega uno.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  const sorted = [...allProcs].sort((a, b) => {
+    if (a.state === 'RUNNING') return -1;
+    if (b.state === 'RUNNING') return 1;
+    return 0;
+  });
+
+  for (const p of sorted) {
+    const isRunning = p.pid === state.currentPid;
+    const progress = p.allRefs.length > 0 ? (p.refsExecuted / p.allRefs.length * 100) : 0;
+    const card = document.createElement('div');
+    card.className = `proc-card${isRunning ? ' running' : ''}${p.state === 'FINISHED' ? ' finished' : ''}`;
+
+    card.innerHTML = `
+      <div class="proc-header">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:${pidColor(p.pid)};"></div>
+          <span class="proc-name">${p.name}</span>
+          <span class="proc-pid">PID ${p.pid}</span>
+        </div>
+        <span class="proc-state state-${p.state.toLowerCase()}">${p.state}</span>
+      </div>
+      <div class="proc-stats">
+        <div class="proc-stat"><span class="k">Refs ejec.</span><span class="v">${p.refsExecuted}/${p.allRefs.length}</span></div>
+        <div class="proc-stat"><span class="k">Fallos</span><span class="v" style="color:var(--red)">${p.pageFaults}</span></div>
+        <div class="proc-stat"><span class="k">Páginas</span><span class="v">${p.numPages}</span></div>
+      </div>
+      <div class="proc-refs-bar"><div class="proc-refs-fill" style="width:${progress}%"></div></div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px;">
+        Próx. refs: ${p.allRefs.slice(p.currentRefIndex, p.currentRefIndex + 6).join(', ')}${p.allRefs.length - p.currentRefIndex > 6 ? '…' : ''}
+      </div>
+    `;
+    list.appendChild(card);
+  }
+}
+
+function renderPageTables() {
+  const pane = document.getElementById('pane-pages');
+  pane.innerHTML = '';
+
+  // Global frame table title
+  const title = document.createElement('div');
+  title.className = 'panel-title';
+  title.style = 'padding:0 0 8px 0;margin-bottom:8px;';
+  title.innerHTML = '<span class="dot dot-green"></span>Tablas de páginas por proceso';
+  pane.appendChild(title);
+
+  for (const proc of state.processes) {
+    const section = document.createElement('div');
+    section.className = 'pt-section';
+
+    const ptTitle = document.createElement('div');
+    ptTitle.className = 'pt-title';
+    ptTitle.innerHTML = `
+      <span style="color:${pidColor(proc.pid)}">●</span>
+      ${proc.name} <span style="color:var(--muted)">(PID ${proc.pid})</span>
+      <span class="proc-state state-${proc.state.toLowerCase()}" style="margin-left:4px;">${proc.state}</span>
+    `;
+    section.appendChild(ptTitle);
+
+    const table = document.createElement('table');
+    table.innerHTML = `
+      <thead><tr>
+        <th>Página</th><th>Marco</th><th>Presente</th><th>Referenciada</th><th>Sucia</th>
+      </tr></thead>
+      <tbody>
+        ${proc.pageTable.map(entry => `
+          <tr>
+            <td style="font-family:var(--mono)">${entry.page}</td>
+            <td style="font-family:var(--mono)">${entry.present ? entry.frame : '—'}</td>
+            <td><span class="bit bit-${entry.present?1:0}">${entry.present?1:0}</span></td>
+            <td><span class="bit bit-${entry.referenced?1:0}">${entry.referenced?1:0}</span></td>
+            <td><span class="bit bit-${entry.dirty?1:0}">${entry.dirty?1:0}</span></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    `;
+    section.appendChild(table);
+    pane.appendChild(section);
+  }
+}
+
+function renderReports() {
+  const pane = document.getElementById('pane-reports');
+  pane.innerHTML = '';
+
+  const title = document.createElement('div');
+  title.className = 'reports-title';
+  title.innerHTML = '<span class="dot dot-green"></span>Reporte de Procesos Terminados';
+  pane.appendChild(title);
+
+  if (state.finishedProcesses.length === 0) {
+    pane.innerHTML += '<div style="color:var(--muted);font-family:var(--mono);font-size:11px;">Ningún proceso ha terminado aún.</div>';
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'report-table';
+  table.innerHTML = `
+    <thead><tr>
+      <th>Proceso</th><th>PID</th>
+      <th>T. Llegada</th><th>T. Finalización</th>
+      <th>T. Espera</th><th>T. Retorno</th>
+      <th>Refs ejec.</th><th>Fallos pág.</th>
+    </tr></thead>
+    <tbody>
+      ${state.finishedProcesses.map(p => `
+        <tr>
+          <td><span style="color:${pidColor(p.pid)}">●</span> ${p.name}</td>
+          <td style="font-family:var(--mono)">${p.pid}</td>
+          <td style="font-family:var(--mono)">${p.arrivalTime}</td>
+          <td style="font-family:var(--mono)">${p.finishTime}</td>
+          <td style="font-family:var(--mono);color:var(--yellow)">${p.waitTime}</td>
+          <td style="font-family:var(--mono);color:var(--accent)">${p.finishTime - p.arrivalTime}</td>
+          <td style="font-family:var(--mono)">${p.refsExecuted}</td>
+          <td style="font-family:var(--mono);color:var(--red)">${p.pageFaults}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  `;
+  pane.appendChild(table);
+
+  // Summary
+  const total = state.finishedProcesses.length;
+  if (total > 0) {
+    const avgWait = (state.finishedProcesses.reduce((s,p)=>s+p.waitTime,0)/total).toFixed(1);
+    const totalFaults = state.totalPageFaults;
+    const summary = document.createElement('div');
+    summary.style = 'margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;gap:24px;';
+    summary.innerHTML = `
+      <span>Procesos terminados: <strong style="color:var(--green)">${total}</strong></span>
+      <span>Tiempo de espera promedio: <strong style="color:var(--yellow)">${avgWait}</strong></span>
+      <span>Total fallos de página: <strong style="color:var(--red)">${totalFaults}</strong></span>
+    `;
+    pane.appendChild(summary);
+  }
+}
+
+// ──────────────────────────────────────────────────────
+// Tabs
+// ──────────────────────────────────────────────────────
+function showTab(tab) {
+  document.getElementById('pane-pages').style.display = tab === 'pages' ? 'block' : 'none';
+  document.getElementById('pane-reports').style.display = tab === 'reports' ? 'block' : 'none';
+  document.getElementById('tab-pages').style.borderBottomColor = tab === 'pages' ? 'var(--accent)' : 'transparent';
+  document.getElementById('tab-pages').style.color = tab === 'pages' ? 'var(--accent)' : 'var(--muted)';
+  document.getElementById('tab-reports').style.borderBottomColor = tab === 'reports' ? 'var(--green)' : 'transparent';
+  document.getElementById('tab-reports').style.color = tab === 'reports' ? 'var(--green)' : 'var(--muted)';
+}
+
+// Keyboard shortcut: Space = step
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+    e.preventDefault();
+    step();
+  }
+});
+</script>
+</body>
+</html>
